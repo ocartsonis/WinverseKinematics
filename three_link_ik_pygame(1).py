@@ -2,9 +2,6 @@ import pygame
 import numpy as np
 import math
 
-# ------------------------
-# Pygame setup
-# ------------------------
 pygame.init()
 WIDTH, HEIGHT = 800, 600
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -12,33 +9,23 @@ pygame.display.set_caption("3-Link IK — Pseudoinverse + Null-Space (Directiona
 clock = pygame.time.Clock()
 font = pygame.font.SysFont("consolas", 18)
 
-# ------------------------
-# Arm parameters & gains
-# ------------------------
-link_lengths = [150, 100, 75]  # 3 links
+link_lengths = [150, 100, 75]
 n_joints = len(link_lengths)
 base = np.array([WIDTH//2, HEIGHT//2], dtype=float)
 
-# Initial posture (in radians)
 joint_angles = np.radians([45, -30, 15]).astype(float)
 
-# Workspace
 max_reach = float(sum(link_lengths))
 
-# Solver gains / options
 alpha = 0.2           # task-space step size
 lambda_damp = 0.08    # damping for damped least squares pseudoinverse
 k_null = 0.4          # null-space ascent gain (manipulability)
 use_null = True       # toggle for null-space optimization
 finite_h = 1e-3       # finite-difference step for gradient
 
-# Controls
 freeze_target = False
 frozen_pos = None
 
-# ------------------------
-# Kinematics helpers
-# ------------------------
 def forward_kinematics(angles):
     """Return list of joint/world points from base to end effector."""
     points = [tuple(base)]
@@ -54,7 +41,7 @@ def forward_kinematics(angles):
 def jacobian(angles):
     """Compute 2xN planar position Jacobian for the end effector."""
     J = np.zeros((2, n_joints), dtype=float)
-    # Standard planar chain Jacobian
+
     for j in range(n_joints):
         dx = 0.0
         dy = 0.0
@@ -72,14 +59,6 @@ def damped_pseudoinverse(J, lam):
     I2 = np.eye(2)
     return J.T @ np.linalg.inv(JJt + (lam ** 2) * I2)
 
-# ------------------------
-# Directional force manipulability (radial outward)
-# ------------------------
-# We optimize the ability to apply force in the radial-outward direction from the base.
-# For a given configuration, directional force capability along unit vector u is proportional to
-#   1 / sqrt(u^T (J J^T)^{-1} u)
-# We therefore maximize f(θ) = - u^T (J J^T)^{-1} u  (equivalently maximize outward force capability).
-
 def radial_unit_from_base(point):
     v = point - base
     n = np.linalg.norm(v)
@@ -88,12 +67,10 @@ def radial_unit_from_base(point):
     return v / n
 
 def force_objective(angles):
-    # Use end-effector radial direction
     ee = np.array(forward_kinematics(angles)[-1])
     u = radial_unit_from_base(ee)
     J = jacobian(angles)
     JJt = J @ J.T
-    # regularize inverse for stability near singularities
     JJt_reg = JJt + (lambda_damp ** 2) * np.eye(2)
     invJJt = np.linalg.inv(JJt_reg)
     val = - float(u.T @ invJJt @ u)  # higher is better (more force)
@@ -108,9 +85,6 @@ def force_objective_grad(angles, h=finite_h):
         grad[i] = (force_objective(pert) - base_val) / h
     return grad
 
-# ------------------------
-# Main loop
-# ------------------------
 running = True
 while running:
     for event in pygame.event.get():
@@ -125,7 +99,6 @@ while running:
                 freeze_target = not freeze_target
                 frozen_pos = None if not freeze_target else np.array(pygame.mouse.get_pos(), dtype=float)
             elif event.key == pygame.K_f:
-                # crude posture flip: mirror the middle joint
                 joint_angles[1] *= -1.0
             elif event.key == pygame.K_n:
                 use_null = not use_null
@@ -138,16 +111,13 @@ while running:
             elif event.key == pygame.K_RIGHTBRACKET:
                 alpha *= 1.25
 
-    # Background
     screen.fill((18, 18, 20))
 
-    # Target (mouse or frozen)
     if freeze_target and frozen_pos is not None:
         raw_target = frozen_pos.copy()
     else:
         raw_target = np.array(pygame.mouse.get_pos(), dtype=float)
 
-    # Clamp only to outer radius (3-link can reach the center)
     vec = raw_target - base
     dist = float(np.linalg.norm(vec))
     if dist > max_reach:
@@ -157,22 +127,18 @@ while running:
         target = raw_target
         clamped = False
 
-    # Current state
     pts = forward_kinematics(joint_angles)
     ee = np.array(pts[-1])
 
-    # IK primary task
     e = target - ee
     if np.linalg.norm(e) > 0.5:
         J = jacobian(joint_angles)
         J_pinv = damped_pseudoinverse(J, lambda_damp)
         dtheta_task = J_pinv @ e * alpha
 
-        # Null-space secondary task
         if use_null:
             N = np.eye(n_joints) - J_pinv @ J
             grad = force_objective_grad(joint_angles)
-            # normalize gradient for stable scaling
             gnorm = float(np.linalg.norm(grad))
             if gnorm > 1e-9:
                 grad = grad / gnorm
@@ -183,26 +149,18 @@ while running:
         dtheta = dtheta_task + dtheta_null
         joint_angles += dtheta
 
-    # ------------------------
-    # Drawing
-    # ------------------------
-    # Reach circle
     pygame.draw.circle(screen, (45, 45, 55), base.astype(int), int(max_reach), 1)
 
-    # Arm
     for i in range(len(pts) - 1):
         pygame.draw.line(screen, (220, 220, 230), pts[i], pts[i+1], 6)
         pygame.draw.circle(screen, (120, 200, 255), (int(pts[i][0]), int(pts[i][1])), 8)
     pygame.draw.circle(screen, (120, 200, 255), (int(pts[-1][0]), int(pts[-1][1])), 8)
 
-    # Target
     pygame.draw.circle(screen, (255, 120, 120) if clamped else (100, 150, 255), target.astype(int), 6)
     if clamped:
-        # show the raw target and a line to clamped
         pygame.draw.circle(screen, (255, 200, 80), raw_target.astype(int), 4, 1)
         pygame.draw.line(screen, (120, 120, 120), raw_target.astype(int), target.astype(int), 1)
 
-    # Overlay
     deg_angles = [((math.degrees(a) + 540) % 360) - 180 for a in joint_angles]
     w_val = force_objective(joint_angles)
     lines = [
