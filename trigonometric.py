@@ -15,7 +15,7 @@ TEXT_COLOR = (210, 210, 220)
 L1 = 220
 L2 = 180
 
-BASE_X, BASE_Y = WIDTH // 2, HEIGHT // 2 + 120
+BASE_X, BASE_Y = WIDTH // 2, HEIGHT // 2 
 
 def clamp(v, lo, hi):
     return max(lo, min(hi, v))

@@ -5,7 +5,7 @@ import math
 pygame.init()
 WIDTH, HEIGHT = 800, 600
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("3-Link IK — Pseudoinverse + Null-Space (Directional Force)")
+pygame.display.set_caption(" Pseudoinverse + Null-Space ")
 clock = pygame.time.Clock()
 font = pygame.font.SysFont("consolas", 18)
 
@@ -27,7 +27,6 @@ freeze_target = False
 frozen_pos = None
 
 def forward_kinematics(angles):
-    """Return list of joint/world points from base to end effector."""
     points = [tuple(base)]
     x, y = base
     theta = 0.0
@@ -39,7 +38,6 @@ def forward_kinematics(angles):
     return points
 
 def jacobian(angles):
-    """Compute 2xN planar position Jacobian for the end effector."""
     J = np.zeros((2, n_joints), dtype=float)
 
     for j in range(n_joints):
@@ -54,7 +52,6 @@ def jacobian(angles):
     return J
 
 def damped_pseudoinverse(J, lam):
-    """Damped least-squares pseudoinverse: J^T (J J^T + lam^2 I)^{-1}."""
     JJt = J @ J.T
     I2 = np.eye(2)
     return J.T @ np.linalg.inv(JJt + (lam ** 2) * I2)
@@ -63,7 +60,7 @@ def radial_unit_from_base(point):
     v = point - base
     n = np.linalg.norm(v)
     if n < 1e-8:
-        return np.array([1.0, 0.0])  # arbitrary when at base
+        return np.array([1.0, 0.0]) 
     return v / n
 
 def force_objective(angles):
@@ -73,7 +70,7 @@ def force_objective(angles):
     JJt = J @ J.T
     JJt_reg = JJt + (lambda_damp ** 2) * np.eye(2)
     invJJt = np.linalg.inv(JJt_reg)
-    val = - float(u.T @ invJJt @ u)  # higher is better (more force)
+    val = - float(u.T @ invJJt @ u) 
     return val
 
 def force_objective_grad(angles, h=finite_h):
